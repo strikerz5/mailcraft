@@ -102,6 +102,38 @@ fn all_mailboxes_asks_each_microsoft_mailbox_once_and_current_folder_that_folder
     assert_eq!(asked(&mut s).iter().map(|r| r.account).collect::<Vec<_>>(), [owner]);
 }
 
+/// Current Mailbox asks the whole of the mailbox the folder in view is in, once; another folder
+/// of the same mailbox is the same search, and a folder of another mailbox a new one.
+#[test]
+fn current_mailbox_asks_that_mailbox_whole_and_keeps_the_search_across_its_folders() {
+    let (mut s, local, owner, shared) = session();
+    s.view.folder = s.mailbox.folder_by_server(shared, "ar").unwrap();
+    search(&mut s, "budget", "mailbox");
+    let requests = asked(&mut s);
+    assert_eq!(requests.iter().map(|r| (r.account, r.shared, r.folder.as_str())).collect::<Vec<_>>(), [(shared, true, "")]);
+    // Its Inbox, or its Deleted Items: the same search, still out.
+    for id in ["in", "de"] {
+        s.view.folder = s.mailbox.folder_by_server(shared, id).unwrap();
+        search(&mut s, "budget", "mailbox");
+        assert!(crate::cmd::search_server::is_current(&s), "{id}");
+        assert!(asked(&mut s).is_empty(), "{id}");
+    }
+    // What comes back from its Deleted Items stays out, as in a search of All Mailboxes.
+    let request = requests.first().cloned().unwrap();
+    answer(&mut s, &request, vec![found("AAkA1", "in", "Budget in", NOW), found("AAkA2", "de", "Budget gone", NOW - 1)], "");
+    assert_eq!(subjects(&s), ["Budget in"]);
+    // A folder of the owner's own mailbox: a new search, of that mailbox alone.
+    s.view.folder = s.mailbox.folder_by_server(owner, "in").unwrap();
+    search(&mut s, "budget", "mailbox");
+    assert!(!crate::cmd::search_server::is_current(&s));
+    assert_eq!(asked(&mut s).iter().map(|r| (r.account, r.shared, r.folder.as_str())).collect::<Vec<_>>(), [(owner, false, "")]);
+    // A folder of a local account: nothing to ask.
+    s.view.folder = s.mailbox.folder_of_kind(local, FolderKind::Inbox).unwrap();
+    search(&mut s, "budget", "mailbox");
+    assert!(crate::cmd::search_server::offered_reason(&s).is_some());
+    assert!(s.run("sync.graphSearchRequest", &json!({})).is_err());
+}
+
 #[test]
 fn results_come_fifty_a_page_newest_first_and_mail_here_shows_once_locally() {
     let (mut s, _, owner, _) = session();

@@ -585,6 +585,66 @@ fn a_search_of_all_mailboxes_takes_in_a_shared_mailbox_and_one_of_its_folder_sta
     assert_eq!(account_of(&s, &unread), [owner, shared, shared]);
 }
 
+/// Current Mailbox: every folder of the mailbox the folder in view is in, that mailbox alone,
+/// and its Deleted Items left out as a search of All Mailboxes leaves them.
+#[test]
+fn a_search_of_the_current_mailbox_is_that_mailbox_whole_and_no_other() {
+    let (mut s, owner, shared) = two_mailboxes();
+    // The shared mailbox gets an Archive with one more "Quarterly figures".
+    let folder = |id: &str, name: &str, kind| GraphFolder { id: id.into(), name: name.into(), kind, ..Default::default() };
+    let folders = vec![
+        folder("in", "Inbox", FolderKind::Inbox),
+        folder("de", "Deleted Items", FolderKind::Deleted),
+        folder("ar", "Archive", FolderKind::Archive),
+    ];
+    let relisted =
+        GraphMailResult { account: shared, email: SHARED.into(), listing: Some(FolderListing { folders, complete: true }), ..Default::default() };
+    apply_graph_mail(&mut s, relisted).unwrap();
+    apply_graph_mail(&mut s, mail_in(shared, SHARED, "ar", &["AAkA5"], "Quarterly figures", 0)).unwrap();
+    let (mine, theirs, archive, gone) = (
+        s.mailbox.folder_by_server(owner, "in").unwrap(),
+        s.mailbox.folder_by_server(shared, "in").unwrap(),
+        s.mailbox.folder_by_server(shared, "ar").unwrap(),
+        s.mailbox.folder_by_server(shared, "de").unwrap(),
+    );
+    let where_found = |s: &Session, ids: &[Id]| -> Vec<(Id, Id)> {
+        let mut out: Vec<(Id, Id)> = ids.iter().filter_map(|id| s.mailbox.message(*id)).map(|m| (m.account, m.folder)).collect();
+        out.sort_unstable();
+        out
+    };
+    // From the shared mailbox's Inbox: its Inbox and its Archive, nothing of the owner's, and
+    // not its Deleted Items.
+    s.run("folder.select", &json!({"id": theirs})).unwrap();
+    let found_there = found(&mut s, "quarterly", "mailbox");
+    assert_eq!(where_found(&s, &found_there), [(shared, theirs), (shared, theirs), (shared, archive)]);
+    // The same from any other folder of that mailbox, its Deleted Items included.
+    for f in [archive, gone] {
+        s.run("folder.select", &json!({"id": f})).unwrap();
+        let again = found(&mut s, "quarterly", "mailbox");
+        assert_eq!(where_found(&s, &again), where_found(&s, &found_there), "from folder {f}");
+    }
+    // The command says which scope it took.
+    let said = s.run("view.search", &json!({"query": "quarterly", "scope": "mailbox"})).unwrap();
+    assert_eq!((said["scope"].as_str(), said["found"].as_u64()), (Some("mailbox"), Some(3)));
+    // From the owner's Inbox: the owner's own mailbox, and not the shared one opened through it.
+    s.run("folder.select", &json!({"id": mine})).unwrap();
+    let found_here = found(&mut s, "quarterly", "mailbox");
+    assert_eq!(where_found(&s, &found_here), [(owner, mine), (owner, mine)]);
+    // Narrower than All Mailboxes, wider than Current Folder.
+    assert_eq!(found(&mut s, "quarterly", "everywhere").len(), 5);
+    s.run("folder.select", &json!({"id": archive})).unwrap();
+    assert_eq!(found(&mut s, "quarterly", "folder").len(), 1);
+    assert_eq!(found(&mut s, "quarterly", "mailbox").len(), 3);
+    // With nothing searched for, the scope changes nothing: the list is the folder in view.
+    assert_eq!(found(&mut s, "", "mailbox").len(), 1);
+    // A mailbox with no mail of its own has nothing to find.
+    let local = s.mailbox.accounts.iter().find(|a| a.kind == AccountKind::Local).map(|a| a.id).unwrap();
+    s.run("folder.select", &json!({"id": s.mailbox.folder_of_kind(local, FolderKind::Inbox).unwrap()})).unwrap();
+    assert!(found(&mut s, "quarterly", "mailbox").is_empty());
+    // Not a scope: refused, and the search as it was.
+    assert!(s.run("view.search", &json!({"query": "quarterly", "scope": "account"})).is_err());
+}
+
 #[test]
 fn unread_is_counted_for_each_mailbox_and_never_added_to_its_owners() {
     let (mut s, owner, shared) = two_mailboxes();

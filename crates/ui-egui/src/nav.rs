@@ -604,9 +604,18 @@ pub(crate) fn folder_path(mb: &Mailbox, id: Id) -> String {
 /// in the bar over a search's results): its name, and for a folder of a shared mailbox the
 /// mailbox it is in, so that its Inbox is never taken for the owner's (#70).
 pub(crate) fn folder_label(mb: &Mailbox, f: &Folder) -> String {
-    let Some(a) = mb.account(f.account).filter(|a| a.is_shared()) else { return folder_name(f).to_string() };
-    let mailbox = if a.name.trim().is_empty() { a.email.trim() } else { a.name.trim() };
-    crate::i18n::fmt(tl!("{folder} - {mailbox}"), &[("folder", folder_name(f)), ("mailbox", mailbox)])
+    if !mb.account(f.account).is_some_and(|a| a.is_shared()) {
+        return folder_name(f).to_string();
+    }
+    crate::i18n::fmt(tl!("{folder} - {mailbox}"), &[("folder", folder_name(f)), ("mailbox", &mailbox_label(mb, f.account))])
+}
+
+/// A mailbox's name as the folder pane heads it: the account's name, or its address when it has
+/// none. Empty for an account that isn't here.
+pub(crate) fn mailbox_label(mb: &Mailbox, account: Id) -> String {
+    let Some(a) = mb.account(account) else { return String::new() };
+    let name = if a.name.trim().is_empty() { a.email.trim() } else { a.name.trim() };
+    name.to_string()
 }
 
 /// A folder's name on a row of a search of every mailbox (#195): [`folder_label`], and for a

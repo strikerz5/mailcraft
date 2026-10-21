@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("view.search", "Search", "Search", search)
             .pure()
             .key("Mod+E / F3")
-            .params(r#"{"query": string, "scope"?: "folder"|"everywhere"}"#),
+            .params(r#"{"query": string, "scope"?: "folder"|"mailbox"|"everywhere"} — folder: the one in view; mailbox: every folder of the mailbox it is in; everywhere: every mailbox"#),
         CommandSpec::new("view.clearSearch", "Close Search", "Search", clear_search).pure(),
         CommandSpec::new("view.previewLines", "Message Preview", "View › Arrangement", preview_lines).pure().params(r#"{"value": 0-3}"#),
         CommandSpec::new("view.day", "Day", "Home › Arrange", day).pure().key(mac_or("Mod+Ctrl+1", "Mod+Alt+1")),
@@ -110,7 +110,7 @@ fn filter(s: &mut Session, v: &Value) -> CmdResult {
 fn search(s: &mut Session, v: &Value) -> CmdResult {
     let query: String = p::req_str(v, "query")?.chars().filter(|c| !c.is_control()).take(2000).collect();
     if let Some(scope) = p::str(v, "scope") {
-        s.view.scope = parse_enum::<Scope>(scope).ok_or_else(|| bad("`scope` is folder or everywhere"))?;
+        s.view.scope = parse_enum::<Scope>(scope).ok_or_else(|| bad("`scope` is folder, mailbox or everywhere"))?;
     }
     // A new search forgets what the servers found for the last (R6.2).
     if s.view.search != query {

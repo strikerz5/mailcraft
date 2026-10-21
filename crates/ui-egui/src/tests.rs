@@ -1910,6 +1910,41 @@ fn imported_mail_for_a_microsoft_account_stays_in_a_local_folder_and_says_why() 
     assert_ne!(a.session.mailbox.message(imported).unwrap().folder, inbox);
 }
 
+/// The scope menu of the search box offers Current Folder, Current Mailbox and All Mailboxes, in
+/// that order; Current Mailbox searches every folder of the mailbox in view and the rows name
+/// their folders, as in a search of All Mailboxes.
+#[test]
+fn the_search_scope_menu_offers_the_current_mailbox_between_the_folder_and_all_mailboxes() {
+    use egui_kittest::kittest::Queryable;
+    let mut a = app();
+    a.execute("view.search", json!({"query": "Atlas"})).unwrap();
+    let in_folder = a.session.rows().len();
+    let mut h = window(a);
+    h.run_steps(3);
+    let scope = h.state().hit.rect("searchScope", 0).unwrap();
+    click_at(&mut h, scope.center());
+    let tops: Vec<f32> = ["Current Folder", "Current Mailbox", "All Mailboxes"].iter().map(|l| h.get_by_label(l).rect().top()).collect();
+    assert!(tops[0] < tops[1] && tops[1] < tops[2], "{tops:?}");
+    h.get_by_label("Current Mailbox").click();
+    h.run_steps(3);
+    assert_eq!(h.state().session.view.scope, mailcraft_engine::Scope::Mailbox);
+    let rows = h.state_mut().session.rows();
+    let s = &h.state().session;
+    assert!(rows.len() > in_folder, "{} found in the folder, {} in the mailbox", in_folder, rows.len());
+    let folders: std::collections::BTreeSet<_> = rows.iter().filter_map(|r| s.mailbox.message(r.id)).map(|m| m.folder).collect();
+    assert!(folders.len() > 1, "the mailbox's search spans its folders");
+    assert!(
+        rows.iter().filter_map(|r| s.mailbox.message(r.id)).all(|m| s.mailbox.account(m.account).is_some_and(|a| a.email == "avery@lumen.example"))
+    );
+    assert!(h.query_by_label_contains(&format!("{} results in avery@lumen.example", rows.len())).is_some());
+    // Back to the folder from the same menu.
+    click_at(&mut h, scope.center());
+    h.get_by_label("Current Folder").click();
+    h.run_steps(3);
+    assert_eq!(h.state().session.view.scope, mailcraft_engine::Scope::Folder);
+    assert_eq!(h.state_mut().session.rows().len(), in_folder);
+}
+
 /// A search says so over the list: how many it found and where; ✕ or Esc ends it (#115).
 #[test]
 fn a_search_is_said_over_the_list_and_ended_by_its_cross_or_esc() {
@@ -1925,6 +1960,10 @@ fn a_search_is_said_over_the_list_and_ended_by_its_cross_or_esc() {
     h.state_mut().execute("view.search", json!({"query": "Atlas", "scope": "everywhere"})).unwrap();
     h.run_steps(3);
     assert!(h.query_by_label_contains("results in All Mailboxes").is_some());
+    // The mailbox the folder is in, by its name.
+    h.state_mut().execute("view.search", json!({"query": "Atlas", "scope": "mailbox"})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label_contains("results in avery@lumen.example").is_some());
     // Nothing found.
     h.state_mut().execute("view.search", json!({"query": "zzzzqq", "scope": "folder"})).unwrap();
     h.run_steps(3);

@@ -1901,6 +1901,12 @@ msgstr "Crea dai dettagli"
 msgid "Current Folder"
 msgstr "Cartella corrente"
 
+#. interface
+#: crates/ui-egui/src/chrome.rs
+#, fuzzy
+msgid "Current Mailbox"
+msgstr "Cassetta postale corrente"
+
 #. ribbon, ribbon location
 #: crates/engine/src/cmd/view.rs crates/ui-egui/src/ribbon.rs
 #, fuzzy

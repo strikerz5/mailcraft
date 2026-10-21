@@ -1901,6 +1901,12 @@ msgstr "Crear a partir de los datos"
 msgid "Current Folder"
 msgstr "Carpeta actual"
 
+#. interface
+#: crates/ui-egui/src/chrome.rs
+#, fuzzy
+msgid "Current Mailbox"
+msgstr "Buzón actual"
+
 #. ribbon, ribbon location
 #: crates/engine/src/cmd/view.rs crates/ui-egui/src/ribbon.rs
 #, fuzzy

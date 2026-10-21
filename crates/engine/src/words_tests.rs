@@ -636,7 +636,7 @@ mod answered {
         let mut read = session(&path);
         read.index_words = false;
         read.search_time = Duration::MAX;
-        for scope in [Scope::Folder, Scope::Everywhere] {
+        for scope in [Scope::Folder, Scope::Mailbox, Scope::Everywhere] {
             for q in QUERIES {
                 let want = found(&mut read, q, scope);
                 assert_eq!(found(&mut indexed, q, scope), want, "{q} ({scope:?})");

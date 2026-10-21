@@ -101,6 +101,10 @@ fn a_shared_mailbox_is_searched_counted_and_a_favourite_here_and_nothing_of_it_r
     s.run("view.search", &json!({"query": "message", "scope": "folder"})).unwrap();
     let here: Vec<Id> = s.rows().iter().map(|r| r.id).collect();
     assert_eq!(accounts_of(&s, &here), [shared, shared, shared]);
+    // Current Mailbox from a folder of the shared mailbox: that mailbox whole, and none of the owner's.
+    s.run("view.search", &json!({"query": "message", "scope": "mailbox"})).unwrap();
+    let whole: Vec<Id> = s.rows().iter().map(|r| r.id).collect();
+    assert_eq!(accounts_of(&s, &whole), [shared, shared, shared]);
 
     // Unread: one read in the shared mailbox here leaves the owner's as they were.
     let one = here.first().copied().unwrap();

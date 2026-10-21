@@ -66,19 +66,35 @@ pub fn rows(s: &Session) -> Vec<Row> {
     rows_with(s, &HashMap::new(), &HashMap::new())
 }
 
-/// Which messages the list looks at: those of the folder in view, or, for a search of every
-/// mailbox, every message but those in Deleted Items, Junk E-mail and their subfolders.
+/// Which messages the list looks at: those of the folder in view; or, for a search of the
+/// current mailbox, every message of the account that folder belongs to; or, for a search of
+/// every mailbox, every message. A search of a mailbox or of everything leaves out what is in
+/// Deleted Items, Junk E-mail and their subfolders.
 pub(crate) fn in_view(s: &Session) -> impl Fn(&Message) -> bool + '_ {
     let mb = &s.mailbox;
-    let everywhere = !Query::parse(&s.view.search).is_empty() && s.view.scope == Scope::Everywhere;
-    // Deleted and junk mail stays out of a search of everything.
-    let hidden: std::collections::HashSet<Id> = if everywhere {
-        mb.folders.iter().filter(|f| matches!(f.kind, FolderKind::Deleted | FolderKind::Junk)).flat_map(|f| mb.subtree(f.id)).collect()
-    } else {
-        Default::default()
-    };
     let folder = s.view.folder;
-    move |m: &Message| if everywhere { !hidden.contains(&m.folder) } else { m.folder == folder }
+    let scope = if Query::parse(&s.view.search).is_empty() { Scope::Folder } else { s.view.scope };
+    // The account searched whole (Current Mailbox); none for the other scopes. A folder that is
+    // gone leaves nothing to search: no message is in it.
+    let account: Option<Id> = match scope {
+        Scope::Mailbox => mb.folder(folder).map(|f| f.account),
+        Scope::Folder | Scope::Everywhere => None,
+    };
+    // Deleted and junk mail stays out of a search of a mailbox or of everything.
+    let hidden: std::collections::HashSet<Id> = if scope == Scope::Folder {
+        Default::default()
+    } else {
+        mb.folders
+            .iter()
+            .filter(|f| matches!(f.kind, FolderKind::Deleted | FolderKind::Junk) && account.is_none_or(|a| f.account == a))
+            .flat_map(|f| mb.subtree(f.id))
+            .collect()
+    };
+    move |m: &Message| match scope {
+        Scope::Folder => m.folder == folder,
+        Scope::Mailbox => account == Some(m.account) && !hidden.contains(&m.folder),
+        Scope::Everywhere => !hidden.contains(&m.folder),
+    }
 }
 
 /// [`rows`], for a search answered in part already: `decided` says whether each message the word

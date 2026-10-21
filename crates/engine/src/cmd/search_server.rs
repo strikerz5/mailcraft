@@ -9,8 +9,10 @@
 //! what came back.
 //!
 //! - **The scope is the one in view.** Current Folder asks for that folder (of a Microsoft
-//!   account, and only when its server has it); All Mailboxes asks each Microsoft account's
-//!   mailbox and each shared mailbox opened through one, once each. IMAP accounts are not asked.
+//!   account, and only when its server has it); Current Mailbox asks the whole of the mailbox
+//!   that folder is in (a Microsoft account's own, or a shared mailbox opened through one); All
+//!   Mailboxes asks each Microsoft account's mailbox and each shared mailbox opened through one,
+//!   once each. IMAP accounts are not asked.
 //! - **What goes** is the part of the query Graph's search understands
 //!   ([`mailcraft_model::search::Query::for_server`]); the rest is checked here against what
 //!   comes back, and the search says so ([`ServerSearch::checked_here`]).
@@ -58,7 +60,8 @@ pub fn specs() -> Vec<CommandSpec> {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Searched {
     pub account: Id,
-    /// The folder's server id, for Current Folder; empty for the whole mailbox.
+    /// The folder's server id, for Current Folder; empty for the whole mailbox (Current Mailbox,
+    /// All Mailboxes).
     pub folder: String,
     /// Where its next page is, as its server named it; empty before the first.
     pub next: String,
@@ -87,7 +90,8 @@ pub struct ServerResult {
 pub struct ServerSearch {
     /// Counts the searches: a request carries it, and an answer for another is not taken in.
     pub ticket: u64,
-    /// The search these are for: the query, the scope, and the folder in view.
+    /// The search these are for: the query, the scope, and where it looks (the folder in view
+    /// for Current Folder, its account for Current Mailbox, nothing for All Mailboxes).
     key: Option<(String, Scope, Id)>,
     pub mailboxes: Vec<Searched>,
     /// Newest first.
@@ -124,8 +128,13 @@ impl ServerSearch {
 
 /// What the search in view is, for [`ServerSearch`]'s key.
 fn key_of(s: &Session) -> (String, Scope, Id) {
-    let folder = if s.view.scope == Scope::Folder { s.view.folder } else { 0 };
-    (s.view.search.clone(), s.view.scope, folder)
+    let place = match s.view.scope {
+        Scope::Folder => s.view.folder,
+        // Another folder of the same mailbox is the same search.
+        Scope::Mailbox => s.mailbox.folder(s.view.folder).map(|f| f.account).unwrap_or(0),
+        Scope::Everywhere => 0,
+    };
+    (s.view.search.clone(), s.view.scope, place)
 }
 
 /// The mailboxes the search in view would go to: each with the server id of the folder to search
@@ -145,6 +154,7 @@ pub fn mailboxes_for(s: &Session) -> Vec<(Id, String)> {
             .and_then(|f| f.server.as_ref().map(|server| (f.account, server.id.clone())))
             .into_iter()
             .collect(),
+        Scope::Mailbox => mb.folder(s.view.folder).map(|f| f.account).filter(|a| usable(*a)).map(|a| (a, String::new())).into_iter().collect(),
         Scope::Everywhere => mb.accounts.iter().filter(|a| usable(a.id)).map(|a| (a.id, String::new())).collect(),
     }
 }
@@ -238,10 +248,10 @@ pub fn apply(s: &mut Session, result: GraphSearchResult) -> CmdResult {
     let Some(at) = s.server_search.mailboxes.iter().position(|m| m.account == account) else {
         return Ok(json!({"taken": 0, "stale": true}));
     };
-    let everywhere = s.view.scope == Scope::Everywhere;
+    let whole_mailbox = s.view.scope != Scope::Folder;
     let mb = &s.mailbox;
-    // Deleted and junk mail stays out of a search of everything, as it does here.
-    let hidden: HashSet<Id> = if everywhere {
+    // Deleted and junk mail stays out of a search of a mailbox or of everything, as it does here.
+    let hidden: HashSet<Id> = if whole_mailbox {
         mb.folders
             .iter()
             .filter(|f| f.account == account && matches!(f.kind, FolderKind::Deleted | FolderKind::Junk))

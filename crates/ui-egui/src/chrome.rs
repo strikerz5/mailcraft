@@ -90,7 +90,7 @@ fn search_box(app: &mut MailApp, ui: &mut Ui, rect: Rect) {
     }
     // The scope menu is about mail folders, so People (which searches contacts) goes without it.
     let mail_search = app.session.view.module != Module::People;
-    let scope_w = if mail_search { 104.0 } else { 0.0 };
+    let scope_w = if mail_search { 112.0 } else { 0.0 };
     let edit_rect = Rect::from_min_max(pos2(rect.min.x + 28.0, rect.min.y + 1.0), pos2(rect.max.x - scope_w - 4.0, rect.max.y - 1.0));
     let hint = match app.session.view.module {
         Module::People => tl!("Search people"),
@@ -143,24 +143,34 @@ fn search_box(app: &mut MailApp, ui: &mut Ui, rect: Rect) {
     if !mail_search {
         return;
     }
-    // Scope: this folder, or every mailbox.
+    // Scope: this folder, the mailbox it is in, or every mailbox.
     let scope_rect = Rect::from_min_max(pos2(rect.max.x - scope_w, rect.min.y + 2.0), pos2(rect.max.x - 2.0, rect.max.y - 2.0));
-    let everywhere = app.session.view.scope == Scope::Everywhere;
-    let label = if everywhere { tl!("All Mailboxes") } else { tl!("Current Folder") };
+    let scope = app.session.view.scope;
+    let label = scope_label(scope);
     let sresp = ui.interact(scope_rect, ui.id().with("search_scope"), Sense::click());
+    app.hit.add("searchScope", 0, scope_rect);
     if sresp.hovered() {
         ui.painter().rect_filled(scope_rect, 4.0, t.hover);
     }
     ui.painter().text(scope_rect.center(), Align2::CENTER_CENTER, format!("{label} ▾"), TypeRung::Caption.regular(), t.text_dim);
     egui::Popup::menu(&sresp).show(|ui| {
-        for (name, code, on) in [("Current Folder", "folder", !everywhere), ("All Mailboxes", "everywhere", everywhere)] {
-            if ui.selectable_label(on, tl!(name)).clicked() {
+        for (choice, code) in [(Scope::Folder, "folder"), (Scope::Mailbox, "mailbox"), (Scope::Everywhere, "everywhere")] {
+            if ui.selectable_label(choice == scope, scope_label(choice)).clicked() {
                 let query = app.session.view.search.clone();
                 let _ = app.execute("view.search", json!({"query": query, "scope": code}));
                 ui.close();
             }
         }
     });
+}
+
+/// The name of a search scope, as the scope menu lists it.
+fn scope_label(scope: Scope) -> &'static str {
+    match scope {
+        Scope::Folder => tl!("Current Folder"),
+        Scope::Mailbox => tl!("Current Mailbox"),
+        Scope::Everywhere => tl!("All Mailboxes"),
+    }
 }
 
 pub fn title_bar(app: &mut MailApp, ui: &mut Ui) {

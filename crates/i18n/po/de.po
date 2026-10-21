@@ -1899,6 +1899,12 @@ msgstr "Aus Angaben erstellen"
 msgid "Current Folder"
 msgstr "Aktueller Ordner"
 
+#. interface
+#: crates/ui-egui/src/chrome.rs
+#, fuzzy
+msgid "Current Mailbox"
+msgstr "Aktuelles Postfach"
+
 #. ribbon, ribbon location
 #: crates/engine/src/cmd/view.rs crates/ui-egui/src/ribbon.rs
 #, fuzzy

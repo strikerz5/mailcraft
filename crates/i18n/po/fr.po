@@ -1901,6 +1901,12 @@ msgstr "Créer à partir des coordonnées"
 msgid "Current Folder"
 msgstr "Dossier actif"
 
+#. interface
+#: crates/ui-egui/src/chrome.rs
+#, fuzzy
+msgid "Current Mailbox"
+msgstr "Boîte aux lettres active"
+
 #. ribbon, ribbon location
 #: crates/engine/src/cmd/view.rs crates/ui-egui/src/ribbon.rs
 #, fuzzy
