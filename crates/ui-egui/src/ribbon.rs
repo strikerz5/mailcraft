@@ -357,6 +357,17 @@ fn home_mail(app: &MailApp) -> Tab {
     ])
 }
 
+/// The calendar's four views, the one in use marked, in `section` of the simplified row: Home has
+/// them, and View while the calendar is in front.
+fn calendar_views(cur: CalView, section: u8) -> Vec<Item> {
+    vec![
+        Item::big("day", "Day", "view.day", no()).checked(cur == CalView::Day).at(section, 2),
+        Item::big("workWeek", "Work\nWeek", "view.workWeek", no()).checked(cur == CalView::WorkWeek).at(section, 2),
+        Item::big("week", "Week", "view.week", no()).checked(cur == CalView::Week).at(section, 2),
+        Item::big("month", "Month", "view.month", no()).checked(cur == CalView::Month).at(section, 2),
+    ]
+}
+
 fn home_calendar(app: &MailApp) -> Tab {
     let cur = app.session.view.calendar;
     let selected = app.session.sel.event.and_then(|id| app.session.mailbox.event(id));
@@ -386,15 +397,7 @@ fn home_calendar(app: &MailApp) -> Tab {
                 Item::small("calendar", "Go to Date", "Go to Date", "view.goToDate", no()).under("view.today"),
             ],
         ),
-        g(
-            "Arrange",
-            vec![
-                Item::big("day", "Day", "view.day", no()).checked(cur == CalView::Day).at(2, 2),
-                Item::big("workWeek", "Work\nWeek", "view.workWeek", no()).checked(cur == CalView::WorkWeek).at(2, 2),
-                Item::big("week", "Week", "view.week", no()).checked(cur == CalView::Week).at(2, 2),
-                Item::big("month", "Month", "view.month", no()).checked(cur == CalView::Month).at(2, 2),
-            ],
-        ),
+        g("Arrange", calendar_views(cur, 2)),
     ];
     // What is done with an appointment is there while one is selected (in Outlook, a tab of its
     // own comes up for it), and the answers to a meeting while it is somebody else's.
@@ -711,18 +714,23 @@ fn view(app: &MailApp) -> Tab {
     let v = &app.session.view;
     let mut tab = view_of_any(app);
     if v.module == Module::Calendar {
-        // The calendar's own: what a row of its hours stands for, and whether the calendars that
+        // The calendar's own, in place of the messages' preview and sorting, which mean nothing
+        // here: its four views, as Home has them (Outlook's View tab has them too, and that is
+        // where people look); what a row of its hours stands for; and whether the calendars that
         // are shown lie over one another or stand side by side.
         let scale = Item::big_menu("timeScale", "clock", "Time\nScale", "Time Scale", Menu::TimeScale).at(2, 3);
         let over = mailcraft_engine::cmd::calendar_settings::overlaid(&app.session);
         let overlay = Item::big("copy", "Overlay", "view.overlay", no()).checked(over).at(2, 3);
         let beside = Item::big("readingPane", "Side-by-\nSide", "view.sideBySide", no()).at(2, 3);
-        tab.groups.insert(tab.groups.len().min(3), g("Calendar", vec![scale, overlay, beside]));
+        tab.groups.retain(|group| group.title != "Messages" && group.title != "Arrangement");
+        let after_layout = tab.groups.len().min(1);
+        tab.groups.splice(after_layout..after_layout, [g("Arrangement", calendar_views(v.calendar, 1)), g("Calendar", vec![scale, overlay, beside])]);
     }
     tab
 }
 
-/// The View tab as every module has it.
+/// The View tab as every module has it: Layout, then the messages' two groups (which the calendar
+/// replaces with its own, by their titles), then Window.
 fn view_of_any(app: &MailApp) -> Tab {
     let v = &app.session.view;
     Tab::of(vec![
@@ -776,31 +784,115 @@ fn help() -> Tab {
 
 // ---- menus ----
 
-/// Every folder of the account in view, indented, as menu items; `pick` runs with the chosen one.
+/// Longest search read (the rest is ignored), so that a pasted wall of text costs nothing.
+const FOLDER_SEARCH_MAX: usize = 200;
+
+/// What the search box of a folder menu remembers while the menu is open (#74).
+#[derive(Clone, Default)]
+struct FolderSearch {
+    text: String,
+    /// The row the arrow keys are on, among the rows they can choose.
+    at: usize,
+    /// The frame the menu was last drawn in: a gap means it was closed, and it opens afresh.
+    seen: Option<u64>,
+}
+
+/// A folder as the menu lists it: its id, name, place in the tree (`Inbox/Projects`) and depth.
+type FolderRow = (Id, String, String, usize);
+
+/// The folders whose name holds `query` (any part, ignoring case and accents), as indexes into
+/// `list`. Nothing typed (or nothing but marks) is all of them.
+fn folder_matches(list: &[FolderRow], query: &str) -> Vec<usize> {
+    let wanted = mailcraft_model::words::fold(&query.chars().take(FOLDER_SEARCH_MAX).collect::<String>());
+    list.iter().enumerate().filter(|(_, row)| wanted.is_empty() || mailcraft_model::words::fold(&row.1).contains(&wanted)).map(|(i, _)| i).collect()
+}
+
+/// A search box and then every folder of the account in view as menu items, indented; `pick` runs
+/// with the chosen one. Typing narrows the list to the folders whose name matches, each shown
+/// with its place in the tree; the arrow keys and Enter choose, and Escape clears the search
+/// before it closes the menu (#74).
 pub fn folder_menu(ui: &mut Ui, app: &mut MailApp, mut pick: impl FnMut(&mut MailApp, Id)) {
     let account = app.session.mailbox.folder(app.session.view.folder).map(|f| f.account).or(app.session.mailbox.default_account().map(|a| a.id));
     let Some(account) = account else { return };
-    fn walk(app: &MailApp, account: Id, parent: Option<Id>, depth: usize, out: &mut Vec<(Id, String, usize)>) {
+    fn walk(app: &MailApp, account: Id, parent: Option<Id>, depth: usize, out: &mut Vec<FolderRow>) {
         if depth > 32 {
             return;
         }
         for f in app.session.mailbox.children(account, parent) {
-            out.push((f.id, crate::nav::folder_name(f).to_string(), depth));
+            out.push((f.id, crate::nav::folder_name(f).to_string(), crate::nav::folder_path(&app.session.mailbox, f.id), depth));
             walk(app, account, Some(f.id), depth + 1, out);
         }
     }
     let mut list = Vec::new();
     walk(app, account, None, 0, &mut list);
+
+    let key = ui.id().with("folder-search");
+    let frame = ui.ctx().cumulative_frame_nr();
+    let mut st: FolderSearch = ui.data(|d| d.get_temp(key)).unwrap_or_default();
+    let fresh = st.seen.is_none_or(|seen| frame > seen.saturating_add(2));
+    if fresh {
+        st = FolderSearch::default();
+    }
+    st.seen = Some(frame);
+
+    let edit = ui.add(egui::TextEdit::singleline(&mut st.text).hint_text(tl!("Search folders")).desired_width(200.0).char_limit(FOLDER_SEARCH_MAX));
+    if fresh {
+        edit.request_focus();
+    }
+    let searching = !mailcraft_model::words::fold(&st.text).is_empty();
+    let shown = folder_matches(&list, &st.text);
+    // The rows the keys can choose: not the folder in view, which can't be moved to.
+    let current = app.session.view.folder;
+    let choosable: Vec<usize> = shown.iter().copied().filter(|i| list.get(*i).is_some_and(|row| row.0 != current)).collect();
+    st.at = st.at.min(choosable.len().saturating_sub(1));
+    let (down, up, enter, escape) = ui.input_mut(|i| {
+        (
+            i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+            i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+            // Escape clears a search first; with none typed the menu takes it and closes.
+            searching && i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
+        )
+    });
+    if escape {
+        st.text.clear();
+        st.at = 0;
+    }
+    if !choosable.is_empty() {
+        if down {
+            st.at = (st.at + 1) % choosable.len();
+        }
+        if up {
+            st.at = if st.at == 0 { choosable.len() - 1 } else { st.at - 1 };
+        }
+    }
+    let marked = if searching { choosable.get(st.at).copied() } else { None };
+    let mut chosen = if enter { marked.and_then(|i| list.get(i)).map(|row| row.0) } else { None };
+
+    ui.add_space(2.0);
     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-        for (id, name, depth) in list {
-            let current = id == app.session.view.folder;
-            let label = format!("{}{name}", "    ".repeat(depth));
-            if ui.add_enabled(!current, egui::Button::new(label).min_size(vec2(200.0, 0.0))).clicked() {
-                pick(app, id);
-                ui.close();
+        if shown.is_empty() {
+            ui.label(egui::RichText::new(tl!("No folders match")).color(Tokens::get(ui.ctx()).text_dim));
+        }
+        for i in shown {
+            let Some((id, name, path, depth)) = list.get(i) else { continue };
+            let label = if searching { path.clone() } else { format!("{}{name}", "    ".repeat(*depth)) };
+            let button = egui::Button::new(label).selected(marked == Some(i)).min_size(vec2(200.0, 0.0));
+            let response = ui.add_enabled(*id != current, button);
+            if marked == Some(i) && (down || up) {
+                response.scroll_to_me(None);
+            }
+            if response.clicked() {
+                chosen = Some(*id);
             }
         }
     });
+    ui.data_mut(|d| d.insert_temp(key, st));
+    if let Some(id) = chosen {
+        pick(app, id);
+        ui.data_mut(|d| d.insert_temp(key, FolderSearch::default()));
+        ui.close();
+    }
 }
 
 /// The categories as menu items that toggle one on the selection through `command`.
@@ -989,12 +1081,18 @@ fn menu_contents(ui: &mut Ui, app: &mut MailApp, menu: Menu) {
             for (label, n) in [("Off", 0u8), ("1 Line", 1), ("2 Lines", 2), ("3 Lines", 3)] {
                 mi_check(ui, app, label, lines == n, "view.previewLines", json!({"value": n}));
             }
+            ui.separator();
+            let one = app.session.prefs.one_line;
+            mi_check(ui, app, "Single Line", one, "view.oneLine", json!({"value": !one}));
         }
         Menu::ArrangeBy => {
             let sort = app.session.view.sort;
             for s in SortBy::ALL {
                 mi_check(ui, app, s.label(), sort == s, "view.sort", json!({"by": s}));
             }
+            ui.separator();
+            let groups = app.session.prefs.show_groups;
+            mi_check(ui, app, "Show in Groups", groups, "view.groups", json!({"value": !groups}));
         }
         Menu::Theme => {
             let theme = app.ui.theme;
@@ -1819,6 +1917,38 @@ mod tests {
         assert!(follow_up.item.command.is_none() && !follow_up.is_split());
     }
 
+    /// Calendar › View has the four views, the one in use marked, in place of the messages'
+    /// sorting and preview, which mean nothing there; Mail › View keeps those and has no views.
+    #[test]
+    fn the_calendar_view_tab_has_its_views() {
+        let mail_only = ["view.conversations", "preview", "arrangeBy", "view.reverseSort"];
+        let views = ["view.day", "view.workWeek", "view.week", "view.month"];
+        let checked_view = |a: &MailApp| -> Vec<&str> {
+            describe(a).items().filter(|item| views.contains(&item.key) && item.checked).map(|item| item.key).collect()
+        };
+        let mut a = app();
+        a.execute("view.calendar", json!({})).unwrap();
+        a.execute("ui.tab", json!({"tab": "View"})).unwrap();
+        let tab = describe(&a);
+        assert_eq!(tab.groups.iter().map(|g| g.title).collect::<Vec<_>>(), ["Layout", "Arrangement", "Calendar", "Window"]);
+        let arrangement: Vec<(&str, bool, u8, u8)> =
+            tab.groups[1].items.iter().map(|item| (item.key, item.checked, item.section, item.rank)).collect();
+        assert_eq!(arrangement, [("view.day", false, 1, 2), ("view.workWeek", false, 1, 2), ("view.week", true, 1, 2), ("view.month", false, 1, 2)]);
+        // The calendar's own group is as it was.
+        let calendar: Vec<&str> = tab.groups[2].items.iter().map(|item| item.key).collect();
+        assert_eq!(calendar, ["timeScale", "view.overlay", "view.sideBySide"]);
+        assert!(!tab.items().any(|item| mail_only.contains(&item.key)));
+        // Each view, pressed, is the one marked.
+        for view in views {
+            a.execute(view, json!({})).unwrap();
+            assert_eq!(checked_view(&a), [view]);
+        }
+        a.execute("view.mail", json!({})).unwrap();
+        let tab = describe(&a);
+        assert!(!tab.items().any(|item| views.contains(&item.key)));
+        assert!(mail_only.iter().all(|key| tab.items().any(|item| item.key == *key)));
+    }
+
     /// Labels go before buttons, the plain before the others, the least important first; the
     /// first-rank button keeps its label until all the rest is behind `…`.
     #[test]
@@ -2163,5 +2293,113 @@ mod tests {
                 ("Send/Receive", vec!["Send/Receive\nAll Folders"]),
             ]
         );
+    }
+
+    /// The folder menu with a search box, drawn on its own: the app, and the folder chosen.
+    type Picker = egui_kittest::Harness<'static, (MailApp, Option<Id>)>;
+
+    fn picker(app: MailApp) -> Picker {
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(400.0, 500.0)).build_ui_state(
+            |ui, (app, picked): &mut (MailApp, Option<Id>)| {
+                folder_menu(ui, app, |_, id| *picked = Some(id));
+            },
+            (app, None),
+        );
+        h.run_steps(3);
+        h
+    }
+
+    fn type_into(h: &mut Picker, text: &str) {
+        h.event(egui::Event::Text(text.to_string()));
+        h.run_steps(3);
+    }
+
+    fn press(h: &mut Picker, key: egui::Key) {
+        h.key_press(key);
+        h.run_steps(3);
+    }
+
+    fn folder_row(name: &str) -> FolderRow {
+        (1, name.to_string(), name.to_string(), 0)
+    }
+
+    /// Typing narrows the list to the folders whose name holds it, any part, whatever the case
+    /// and accents; nothing typed shows all (#74).
+    #[test]
+    fn folder_search_matches_any_part_ignoring_case_and_accents() {
+        let list = [folder_row("Inbox"), folder_row("Café Receipts"), folder_row("Projects"), folder_row("Archive 2026")];
+        assert_eq!(folder_matches(&list, ""), [0, 1, 2, 3]);
+        assert_eq!(folder_matches(&list, "   "), [0, 1, 2, 3]);
+        assert_eq!(folder_matches(&list, "BOX"), [0]);
+        assert_eq!(folder_matches(&list, "cafe"), [1]);
+        assert_eq!(folder_matches(&list, "é rec"), [1]);
+        assert_eq!(folder_matches(&list, "202"), [3]);
+        assert!(folder_matches(&list, "zzz").is_empty());
+    }
+
+    /// Hostile or enormous text asks for nothing and never panics.
+    #[test]
+    fn folder_search_survives_hostile_text() {
+        let list = [folder_row("Inbox"), folder_row("Ünï")];
+        let long = "é".repeat(100_000);
+        for q in [long.as_str(), "\u{0}\u{7f}\u{202e}", "\u{1F600}\u{200d}\u{1F600}", "%s{}[]\\", "\n\r\t", "ß", "\u{301}"] {
+            let _ = folder_matches(&list, q);
+        }
+        assert!(folder_matches(&list, &long).is_empty());
+        assert!(folder_matches(&[], "x").is_empty());
+        // Through the window as well: typed, then keys, with nothing to choose.
+        let mut h = picker(app());
+        type_into(&mut h, &"\u{1F600}x".repeat(500));
+        for key in [egui::Key::ArrowDown, egui::Key::ArrowUp, egui::Key::Enter, egui::Key::Escape] {
+            press(&mut h, key);
+        }
+        assert_eq!(h.state().1, None);
+    }
+
+    /// The box has the keyboard when the menu opens: typing filters, Enter chooses.
+    #[test]
+    fn folder_search_is_typed_into_and_chosen_by_keyboard() {
+        let a = app();
+        let sent = {
+            let mb = &a.session.mailbox;
+            let account = mb.default_account().map(|x| x.id).unwrap();
+            mb.folder_of_kind(account, mailcraft_model::FolderKind::Sent).unwrap()
+        };
+        let mut h = picker(a);
+        assert!(h.query_by_label_contains("Drafts").is_some());
+        type_into(&mut h, "SENT");
+        assert!(h.query_by_label_contains("Drafts").is_none());
+        press(&mut h, egui::Key::Enter);
+        assert_eq!(h.state().1, Some(sent));
+    }
+
+    /// Nothing matching says so, and Enter chooses nothing.
+    #[test]
+    fn folder_search_with_no_match_says_so() {
+        let mut h = picker(app());
+        type_into(&mut h, "qqqqzz");
+        assert!(h.query_by_label_contains("No folders match").is_some());
+        press(&mut h, egui::Key::Enter);
+        assert_eq!(h.state().1, None);
+    }
+
+    /// Down moves to the next match, and Escape clears the search (so the full list is back).
+    #[test]
+    fn folder_search_arrows_move_and_escape_clears() {
+        let mut probe = picker(app());
+        type_into(&mut probe, "e");
+        press(&mut probe, egui::Key::Enter);
+        let first = probe.state().1;
+        let mut h = picker(app());
+        type_into(&mut h, "e");
+        press(&mut h, egui::Key::ArrowDown);
+        press(&mut h, egui::Key::Enter);
+        assert!(h.state().1.is_some());
+        assert_ne!(h.state().1, first);
+        let mut h = picker(app());
+        type_into(&mut h, "sent");
+        assert!(h.query_by_label_contains("Drafts").is_none());
+        press(&mut h, egui::Key::Escape);
+        assert!(h.query_by_label_contains("Drafts").is_some());
     }
 }

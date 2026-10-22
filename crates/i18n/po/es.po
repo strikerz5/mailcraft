@@ -303,6 +303,11 @@ msgstr "Una imagen que haya pedido se conserva durante un mes, para que al volve
 msgid "A rule needs a name, and something to look for."
 msgstr "Una regla necesita un nombre y algo que buscar."
 
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "A save of the mailbox is still running: try again in a moment"
+msgstr ""
+
 #. what a command says
 #: crates/engine/src/cmd/calendar/meeting.rs
 #, fuzzy
@@ -1925,6 +1930,11 @@ msgstr "Cortar"
 msgid "Dark"
 msgstr "Oscuro"
 
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Data on this computer"
+msgstr ""
+
 #. name
 #: crates/engine/src/session.rs
 #, fuzzy
@@ -2332,6 +2342,11 @@ msgid "Download pictures in mail automatically"
 msgstr "Descargar imágenes del correo automáticamente"
 
 #. interface
+#: crates/ui-egui/src/dialogs.rs
+msgid "Downloaded pictures and opened attachments can't be told apart by account: File › Info › Remove MailCraft's data from this computer clears them."
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/attachment_open.rs crates/ui-egui/src/files.rs
 #, fuzzy
 msgid "Downloaded {name}"
@@ -2618,6 +2633,11 @@ msgstr "Cada {n} minutos"
 #, fuzzy
 msgid "Everything"
 msgstr "Todo"
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Everything else is gone. MailCraft quits when you close this."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/backstage.rs
@@ -3362,7 +3382,7 @@ msgid "In {place}"
 msgstr "En {place}"
 
 #. name
-#: crates/model/src/mailbox.rs
+#: crates/model/src/mailbox.rs crates/model/src/sync/progress.rs
 #, fuzzy
 msgid "Inbox"
 msgstr "Bandeja de entrada"
@@ -3523,6 +3543,11 @@ msgstr "Solo está en este dispositivo: no se envía nada a ningún servidor ni 
 msgid "It is removed from the mail server too, and that can't be undone."
 msgstr "También se quita del servidor de correo, y eso no se puede deshacer."
 
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "It is the same for an installed and a portable copy. MailCraft quits afterwards."
+msgstr ""
+
 #. command label, ribbon
 #: crates/engine/src/cmd/format.rs crates/ui-egui/src/ribbon.rs
 #, fuzzy
@@ -3540,6 +3565,11 @@ msgstr "Los elementos de este calendario se guardan en este equipo y en ningún 
 #, fuzzy
 msgid "Its mail can be read here. What you change in it is kept in this mailbox, and this version tells no mail server about it."
 msgstr "Su correo se puede leer aquí. Lo que cambie se guarda en este buzón, y esta versión no se lo comunica a ningún servidor de correo."
+
+#. interface
+#: crates/ui-egui/src/dialogs.rs
+msgid "Its messages, attachments, settings and remembered sign-in go with it."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/signatures.rs
@@ -3914,6 +3944,16 @@ msgid "Mail moves and copies between a shared mailbox and its own account's mail
 msgstr "El correo solo se mueve y copia entre un buzón compartido y los buzones de su propia cuenta: muévalo allí o a una carpeta de este equipo"
 
 #. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Mail on the servers is not touched."
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Mail on the servers is not touched. This can't be undone."
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/account_setup/help.rs
 #, fuzzy
 msgid "Mail only"
@@ -4032,6 +4072,16 @@ msgstr "MailCraft {version} está disponible y corrige un problema de seguridad"
 #, fuzzy
 msgid "MailCraft {version} wasn't installed: this version is still the one here."
 msgstr "MailCraft {version} no se instaló: sigue instalada esta versión."
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "MailCraft's data has been removed already"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/lib.rs
+msgid "MailCraft's data has been removed: nothing is sent or received"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/backstage.rs crates/ui-egui/src/nav.rs
@@ -4629,8 +4679,13 @@ msgstr ""
 "Nueva\n"
 "tarea"
 
+#. interface
+#: crates/ui-egui/src/calendar_view.rs
+msgid "New All Day Event"
+msgstr ""
+
 #. command label, interface
-#: crates/engine/src/cmd/calendar.rs crates/ui-egui/src/forms.rs
+#: crates/engine/src/cmd/calendar.rs crates/ui-egui/src/calendar_view.rs crates/ui-egui/src/forms.rs
 #, fuzzy
 msgid "New Appointment"
 msgstr "Nueva cita"
@@ -4672,7 +4727,7 @@ msgid "New Mailbox"
 msgstr "Nuevo buzón"
 
 #. command label, interface
-#: crates/engine/src/cmd/calendar.rs crates/ui-egui/src/forms.rs
+#: crates/engine/src/cmd/calendar.rs crates/ui-egui/src/calendar_view.rs crates/ui-egui/src/forms.rs
 #, fuzzy
 msgid "New Meeting"
 msgstr "Nueva reunión"
@@ -4878,6 +4933,11 @@ msgstr "Sin fecha de vencimiento"
 #, fuzzy
 msgid "No end date"
 msgstr "Sin fecha de finalización"
+
+#. interface
+#: crates/ui-egui/src/ribbon.rs
+msgid "No folders match"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/scheduling.rs
@@ -5992,10 +6052,30 @@ msgid "Remove Attachment"
 msgstr "Quitar datos adjuntos"
 
 #. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Remove Everything"
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/dialogs.rs
 #, fuzzy
 msgid "Remove Link"
 msgstr "Quitar vínculo"
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Remove MailCraft's Data"
+msgstr ""
+
+#. command label
+#: crates/ui-egui/src/lib.rs
+msgid "Remove MailCraft's Data from This Computer"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Remove MailCraft's data from this computer…"
+msgstr ""
 
 #. command label
 #: crates/engine/src/cmd/offline.rs
@@ -6066,6 +6146,11 @@ msgstr "Quitar esta acción"
 #, fuzzy
 msgid "Remove this condition"
 msgstr "Quitar esta condición"
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Removing MailCraft's data isn't available here"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/signatures.rs
@@ -6572,6 +6657,11 @@ msgid "Search commands"
 msgstr "Buscar comandos"
 
 #. interface
+#: crates/ui-egui/src/ribbon.rs
+msgid "Search folders"
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/chrome.rs
 #, fuzzy
 msgid "Search mail"
@@ -6852,7 +6942,7 @@ msgid "Sending"
 msgstr "Enviando"
 
 #. interface
-#: crates/ui-egui/src/chrome.rs crates/ui-egui/src/lib.rs crates/ui-egui/src/shared_mailboxes.rs
+#: crates/ui-egui/src/chrome.rs crates/ui-egui/src/inbox_pass.rs crates/ui-egui/src/lib.rs crates/ui-egui/src/shared_mailboxes.rs
 #, fuzzy
 msgid "Sending and receiving…"
 msgstr "Enviando y recibiendo…"
@@ -7070,6 +7160,11 @@ msgstr "Mostrar como conversaciones"
 #, fuzzy
 msgid "Show in Calendar"
 msgstr "Mostrar en el calendario"
+
+#. command label, interface
+#: crates/engine/src/cmd/view.rs crates/ui-egui/src/ribbon.rs
+msgid "Show in Groups"
+msgstr "Mostrar en grupos"
 
 #. interface
 #: crates/ui-egui/src/backstage.rs
@@ -7333,6 +7428,11 @@ msgstr "Inicia sesión con {provider}"
 msgid "Simplified Ribbon"
 msgstr "Cinta simplificada"
 
+#. command label, interface
+#: crates/engine/src/cmd/view.rs crates/ui-egui/src/ribbon.rs
+msgid "Single Line"
+msgstr "Una sola línea"
+
 #. interface, name
 #: crates/engine/src/session.rs crates/ui-egui/src/signatures.rs
 #, fuzzy
@@ -7386,6 +7486,11 @@ msgstr "Posponer avisos"
 #, fuzzy
 msgid "Some characters in this message couldn't be read: the sender's program didn't say properly how they were written."
 msgstr "Algunos caracteres de este mensaje no se pudieron leer: el programa del remitente no indicó correctamente cómo estaban escritos."
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Some of it is still there, as listed above. MailCraft quits when you close this."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/mail_view/server_rows.rs
@@ -7614,6 +7719,11 @@ msgstr "Tabla"
 #, fuzzy
 msgid "Tags"
 msgstr "Etiquetas"
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "Take everything MailCraft keeps here with you when you are done: for a shared or work computer, or before deleting a portable copy."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/reading/invitation.rs
@@ -7868,7 +7978,7 @@ msgid "The calendar couldn't be taken in: {error}"
 msgstr "No se pudo incorporar el calendario: {error}"
 
 #. interface
-#: crates/ui-egui/src/calendar_sync.rs
+#: crates/ui-egui/src/calendar_sync.rs crates/ui-egui/src/lib.rs
 #, fuzzy
 msgid "The calendar is being updated already."
 msgstr "Ya se está actualizando el calendario."
@@ -7892,7 +8002,7 @@ msgid "The colour is set in Outlook"
 msgstr "El color se establece en Outlook"
 
 #. interface
-#: crates/ui-egui/src/lib.rs
+#: crates/ui-egui/src/calendar_sync.rs crates/ui-egui/src/lib.rs
 #, fuzzy
 msgid "The contacts couldn't be taken in: {error}"
 msgstr "No se pudieron incorporar los contactos: {error}"
@@ -8042,6 +8152,11 @@ msgid "The organizer of this meeting doesn't take proposals of another time."
 msgstr "El organizador de esta reunión no admite propuestas de otra hora."
 
 #. interface
+#: crates/ui-egui/src/signatures.rs
+msgid "The picture was too big, so it was made smaller ({w} px wide)."
+msgstr "La imagen era demasiado grande y se redujo ({w} px de ancho)."
+
+#. interface
 #: crates/ui-egui/src/account_setup.rs
 #, fuzzy
 msgid "The port; leave it empty for the usual one"
@@ -8090,10 +8205,20 @@ msgid "The sign-in of the account this shared mailbox is opened through was refu
 msgstr "Se rechazó el inicio de sesión de la cuenta con la que se abre este buzón compartido: vuelva a iniciar sesión con Enviar y recibir"
 
 #. interface
+#: crates/ui-egui/src/shared_mailboxes.rs
+msgid "The sign-in to {address} waiting in your browser was stopped so the shared mailbox could be read. Send/Receive will ask you to sign in again."
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/graph_switch.rs
 #, fuzzy
 msgid "The switch of {account} to Microsoft Graph waits until MailCraft can reach the server."
 msgstr "El cambio de {account} a Microsoft Graph espera hasta que MailCraft pueda conectar con el servidor."
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "The system's credential store"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/lib.rs
@@ -8160,6 +8285,16 @@ msgstr "No existe esa cuenta"
 #, fuzzy
 msgid "There's no mailbox at {address}."
 msgstr "No hay ningún buzón en {address}."
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "These could not be removed. Remove them yourself:"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "These were left alone:"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/reading/remote.rs
@@ -8611,6 +8746,11 @@ msgstr "Esta imagen está en la web. Esta compilación no puede descargar imáge
 msgid "This picture was downloaded, but can't be shown."
 msgstr "Esta imagen se descargó, pero no se puede mostrar."
 
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "This removes everything MailCraft keeps on this computer: every account's mail, attachments, contacts, calendar and settings, the sign-ins remembered in the system's credential store, downloaded pictures, opened attachments and logs."
+msgstr ""
+
 #. what a command says
 #: crates/engine/src/cmd/calendar.rs
 #, fuzzy
@@ -8966,12 +9106,6 @@ msgstr "Se actualizó {folder} en el servidor"
 #, fuzzy
 msgid "Updates"
 msgstr "Actualizaciones"
-
-#. interface
-#: crates/ui-egui/src/lib.rs
-#, fuzzy
-msgid "Updating the calendar and contacts…"
-msgstr "Actualizando el calendario y los contactos…"
 
 #. interface
 #: crates/ui-egui/src/chrome.rs
@@ -9754,6 +9888,11 @@ msgid "folders are nested too deeply"
 msgstr "las carpetas están anidadas a demasiada profundidad"
 
 #. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "has too many files: the rest was not removed"
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/reminders.rs
 #, fuzzy
 msgid "hours"
@@ -9782,6 +9921,36 @@ msgstr "dentro de {time}"
 #, fuzzy
 msgid "incomplete"
 msgstr "incomplete"
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "is a link: not followed, and nothing in it was removed"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "is nested too deep: left alone"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "is outside the folder being cleared: left alone"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "is part of a mailbox you opened from outside MailCraft's own folder: it is yours and was not touched"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "isn't a folder MailCraft keeps its data in: left alone"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "isn't a folder: left alone"
+msgstr ""
 
 #. what a command says
 #: crates/engine/src/cmd/graph_drafts.rs
@@ -10601,6 +10770,11 @@ msgid_plural "times"
 msgstr[0] "vez"
 msgstr[1] "veces"
 
+#. interface
+#: crates/ui-egui/src/data_removal.rs
+msgid "was kept because the mailbox file beside it could not be removed: remove them together"
+msgstr ""
+
 #. name
 #: crates/model/src/calendar.rs
 #, fuzzy
@@ -10872,6 +11046,11 @@ msgstr "{month} de {year}"
 #, fuzzy
 msgid "{month}/{day}/{year}"
 msgstr "{day}/{month}/{year}"
+
+#. interface
+#: crates/ui-egui/src/sync_panel.rs
+msgid "{m} min {s} s"
+msgstr "{m} min {s} s"
 
 #. interface
 #: crates/ui-egui/src/meeting_dialogs.rs crates/ui-egui/src/reading/invitation.rs
@@ -11370,6 +11549,11 @@ msgstr[0] "{n} resultado en {scope}"
 msgstr[1] "{n} resultados en {scope}"
 
 #. interface
+#: crates/ui-egui/src/sync_panel.rs
+msgid "{n} s"
+msgstr "{n} s"
+
+#. interface
 #: crates/ui-egui/src/chrome.rs
 #, fuzzy
 msgid "{n} selected"
@@ -11447,6 +11631,11 @@ msgstr "{path} no es un buzón; incorpórelo con Archivo › Importar"
 
 #. interface
 #: crates/ui-egui/src/sync_panel.rs
+msgid "{phase} {time}"
+msgstr "{phase} {time}"
+
+#. interface
+#: crates/ui-egui/src/sync_panel.rs
 #, fuzzy
 msgid "{phase}: {detail}"
 msgstr "{phase}: {detail}"
@@ -11456,6 +11645,11 @@ msgstr "{phase}: {detail}"
 #, fuzzy
 msgid "{provider}'s sign-in page is open in your browser"
 msgstr "La página de inicio de sesión de {provider} está abierta en su navegador"
+
+#. interface
+#: crates/ui-egui/src/sync_panel.rs
+msgid "{result} · {time}"
+msgstr "{result} · {time}"
 
 #. interface
 #: crates/ui-egui/src/forms.rs
@@ -11548,4 +11742,8 @@ msgstr "{why}, así que no se recuerdan los inicios de sesión: MailCraft vuelve
 #, fuzzy
 msgid "{why}. {n} changes made in it here wait on this computer."
 msgstr "{why}. {n} cambios hechos aquí en él esperan en este equipo."
+
+#, fuzzy
+#~ msgid "Updating the calendar and contacts…"
+#~ msgstr "Actualizando el calendario y los contactos…"
 

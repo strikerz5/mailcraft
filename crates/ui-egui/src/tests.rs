@@ -392,6 +392,13 @@ fn click_at(harness: &mut egui_kittest::Harness<'static, MailApp>, pos: egui::Po
     harness.run_steps(2);
 }
 
+/// Ctrl+Q is Mark as Read: egui's own Mod+Q quit is off, so it doesn't also close the window.
+#[test]
+fn ctrl_q_does_not_quit() {
+    let harness = window(app());
+    assert!(harness.ctx.options(|o| o.quit_shortcuts.is_empty()));
+}
+
 /// The strip down the left edge of a row switches read and unread, and leaves the selection alone.
 #[test]
 fn the_left_edge_of_a_row_switches_read_and_unread() {
@@ -430,6 +437,24 @@ fn the_theme_follows_the_system_until_one_is_chosen() {
     harness.state_mut().execute("ui.theme", json!({"value": "system"})).unwrap();
     harness.run_steps(2);
     assert!(dark(&harness));
+}
+
+/// #266: a window of its own reports a theme of its own (light, on Linux), and egui keeps the
+/// last pass's, whichever window it was. `logic` runs between passes, so the theme must come from
+/// the main window's input, not from whichever window drew last.
+#[test]
+fn another_windows_theme_does_not_change_the_system_theme() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let pass = |viewport: egui::ViewportId, theme: Option<egui::Theme>| {
+        let viewports = std::iter::once((viewport, egui::ViewportInfo::default())).collect();
+        let raw = egui::RawInput { viewport_id: viewport, viewports, system_theme: theme, ..Default::default() };
+        ctx.run_ui(raw, |_| {}).drop_without_applying_deltas();
+    };
+    pass(egui::ViewportId::ROOT, Some(egui::Theme::Dark));
+    pass(egui::ViewportId::from_hash_of("appointment"), Some(egui::Theme::Light));
+    app.logic(&ctx);
+    assert!(crate::theme::Tokens::get(&ctx).dark, "the main window is dark, so the program is");
 }
 
 /// An account that signs in on its provider's page: Send/Receive has the host sign in first and
@@ -1607,7 +1632,18 @@ fn microsoft_graph_sends_and_brings_the_calendar_before_the_mail() {
         }
     };
 
-    // A message to send, and the first run: Graph sends it and brings the calendar and contacts.
+    // The calendar's own job, which follows a round (#276): looked at, then answered.
+    let mut clock = crate::now_ms();
+    let calendar = |a: &mut MailApp, clock: &mut f64| {
+        *clock += 400_000.0;
+        let started = a.calendar_tick_at(true, *clock);
+        for _ in 0..4 {
+            a.poll_calendar();
+        }
+        started
+    };
+
+    // A message to send, and the first run: Graph sends it; the calendar and contacts follow.
     a.execute("mail.new", json!({"to": "maya@lumen.example", "subject": "Through Graph", "account": id})).unwrap();
     assert_eq!(a.execute("compose.send", json!({})).unwrap()["queued"], true);
     assert_eq!(a.execute("ui.sync", json!({"account": id})).unwrap()["pending"], "graph");
@@ -1616,7 +1652,7 @@ fn microsoft_graph_sends_and_brings_the_calendar_before_the_mail() {
     let row = |a: &MailApp| a.session.sync_progress.accounts.iter().find(|r| r.account == id).cloned().unwrap();
     assert_eq!((row(&a).state, row(&a).phase), (RunState::Running, Some(SyncPhase::Sending)));
     settle(&mut a);
-    assert_eq!(*asked.lock().unwrap(), [(1, true, false)]);
+    assert_eq!(*asked.lock().unwrap(), [(1, false, false)], "what is sent, and nothing of the calendar");
     assert_eq!(*smtp.lock().unwrap(), [0], "what Graph sent is not sent again by the mail server");
     // What Graph sent is part of the run, not the end of it: the mail server's leg comes after,
     // in the same row, which counts the message as sent by this run (not one kept from before).
@@ -1625,25 +1661,31 @@ fn microsoft_graph_sends_and_brings_the_calendar_before_the_mail() {
     let (outbox, sent) =
         (a.session.mailbox.folder_of_kind(id, FolderKind::Outbox).unwrap(), a.session.mailbox.folder_of_kind(id, FolderKind::Sent).unwrap());
     assert_eq!((a.session.mailbox.count(outbox), a.session.mailbox.count(sent)), (0, 1));
+    assert!(a.session.mailbox.events.values().all(|e| e.title != "From the server"), "not in the run");
+    // The round is over: the calendar and contacts come, with the wide stretch.
+    assert!(calendar(&mut a, &mut clock));
+    assert_eq!(*asked.lock().unwrap(), [(1, false, false), (0, true, false)]);
     assert!(a.session.mailbox.events.values().any(|e| e.title == "From the server"));
     assert!(a.session.mailbox.contacts.values().any(|c| c.name() == "Remote Person"));
     assert_eq!(a.tokens.get(&id).unwrap().refresh, "ref-2", "the newest refresh token is the account's");
 
-    // Soon after, with nothing to send: a Send/Receive the owner asked for still brings the days
-    // of the calendar that are on screen (not the wide stretch, nor the contacts).
-    assert_eq!(a.execute("ui.sync", json!({"account": id})).unwrap()["pending"], "graph");
-    assert_eq!(row(&a).phase, Some(SyncPhase::CalendarAndContacts));
+    // Soon after, with nothing to send: a Send/Receive the owner asked for is the mail alone, and
+    // the days on screen follow it (not the wide stretch, nor the contacts).
+    assert_eq!(a.execute("ui.sync", json!({"account": id})).unwrap()["started"], true);
     settle(&mut a);
-    assert_eq!(*asked.lock().unwrap(), [(1, true, false), (0, false, true)]);
+    assert_eq!(asked.lock().unwrap().len(), 2);
+    assert!(calendar(&mut a, &mut clock));
+    assert_eq!(asked.lock().unwrap().last().map(|x| (x.0, x.1)), Some((0, false)));
     // One that started by itself goes straight to the mail: the calendar keeps itself current.
     assert_eq!(a.execute("ui.sync", json!({"account": id, "quiet": true})).unwrap()["started"], true);
     settle(&mut a);
-    assert_eq!(asked.lock().unwrap().len(), 2);
-    // A quarter of an hour on: the calendar again, with the token it has.
+    assert_eq!(asked.lock().unwrap().len(), 3);
+    // A quarter of an hour on: the wide stretch again, with the token it has.
     a.graph_checked.insert(id, 0.0);
     a.execute("ui.sync", json!({"account": id})).unwrap();
     settle(&mut a);
-    assert_eq!(asked.lock().unwrap().last(), Some(&(0, true, true)));
+    assert!(calendar(&mut a, &mut clock));
+    assert_eq!(asked.lock().unwrap().last().map(|x| (x.0, x.1)), Some((0, true)));
     assert_eq!(a.session.mailbox.events.values().filter(|e| e.title == "From the server").count(), 1, "the same event, once");
 
     // No permission for Graph: mail goes on by the mail server, and Graph isn't asked every run.
@@ -1654,6 +1696,7 @@ fn microsoft_graph_sends_and_brings_the_calendar_before_the_mail() {
     a.execute("compose.send", json!({})).unwrap();
     a.execute("ui.sync", json!({"account": id})).unwrap();
     settle(&mut a);
+    calendar(&mut a, &mut clock);
     assert!(a.graph_consent_needed(id));
     assert_eq!(smtp.lock().unwrap().last(), Some(&1), "the mail server sends it");
     let before = asked.lock().unwrap().len();
@@ -1666,8 +1709,9 @@ fn microsoft_graph_sends_and_brings_the_calendar_before_the_mail() {
     assert_eq!(a.execute("ui.connectMicrosoft", json!({"account": id})).unwrap()["pending"], "signIn");
     settle(&mut a);
     assert_eq!(sign_ins.lock().unwrap().last(), Some(&true));
+    calendar(&mut a, &mut clock);
     assert!(!a.graph_consent_needed(id));
-    assert_eq!(asked.lock().unwrap().last().map(|x| (x.1, x.2)), Some((true, true)));
+    assert_eq!(asked.lock().unwrap().last().map(|x| x.1), Some(true));
 
     // The account goes: what came from its server goes with it.
     a.execute("account.remove", json!({"id": id})).unwrap();
@@ -1873,7 +1917,9 @@ fn copy_diagnostics_takes_the_hosts_report_or_says_what_it_can() {
     let alone = a.execute("ui.copyDiagnostics", json!({})).unwrap();
     assert!(alone["text"].as_str().unwrap().contains(env!("CARGO_PKG_VERSION")));
     a.services.diagnostics = Some(Box::new(|| "the host's report".into()));
-    assert_eq!(a.execute("ui.copyDiagnostics", json!({})).unwrap()["text"], "the host's report");
+    // (The host's report, then the last Send/Receive's timings, #276.)
+    let text = a.execute("ui.copyDiagnostics", json!({})).unwrap()["text"].as_str().unwrap().to_string();
+    assert!(text.starts_with("the host's report") && text.contains("Send/Receive timings"), "{text}");
 }
 
 #[test]
@@ -2114,4 +2160,77 @@ fn a_jmap_account_is_left_out_of_send_receive_until_one_can_be_run() {
     // A Send/Receive of every account is the IMAP account's alone.
     a.execute("ui.sync", json!({"password": "not-a-real-password"})).unwrap();
     assert_eq!(*handed.lock().unwrap(), ["ada@imap.example"]);
+}
+
+/// A noisy PNG far over a signature picture's cap.
+fn big_png(side: u32) -> Vec<u8> {
+    use image::ImageEncoder as _;
+    let mut x = 0x9E37_79B9_u32;
+    let raw: Vec<u8> = (0..side * side * 3)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x as u8
+        })
+        .collect();
+    let mut out = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut out).write_image(&raw, side, side, image::ExtendedColorType::Rgb8).unwrap();
+    out
+}
+
+fn signature_app() -> MailApp {
+    let mut a = app();
+    a.execute("signature.set", json!({"name": "Mine", "text": "Avery"})).unwrap();
+    a.execute("signature.open", json!({"name": "Mine"})).unwrap();
+    a
+}
+
+/// #270: a picture over the cap is made smaller to fit, and the page says so.
+#[test]
+fn signature_picture_over_the_cap_is_made_smaller() {
+    use mailcraft_model::signature::{MAX_PICTURE_BYTES, MAX_WIDTH};
+    let png = big_png(1200);
+    assert!(png.len() > 4 * MAX_PICTURE_BYTES);
+    let mut a = signature_app();
+    crate::signatures::add_picture(&mut a, json!({"data": crate::files::base64_lite::encode(&png), "file": "logo.png"}));
+    let e = a.session.signature_edit.as_ref().unwrap();
+    let p = e.signature.pictures().first().expect("picture added");
+    assert!(p.data.len() <= MAX_PICTURE_BYTES);
+    assert!(image::load_from_memory(&p.data).unwrap().width() <= u32::from(MAX_WIDTH));
+    assert!(a.signature_note.as_ref().is_some_and(|n| !n.error));
+}
+
+/// #270: a refusal shows on the Signatures page (the status bar is hidden behind File).
+#[test]
+fn signature_picture_refusal_is_on_the_page() {
+    let mut a = signature_app();
+    crate::signatures::add_picture(&mut a, json!({"data": crate::files::base64_lite::encode(b"not a picture at all"), "file": "x.png"}));
+    assert!(a.signature_note.as_ref().is_some_and(|n| n.error && !n.text.is_empty()));
+    assert!(a.session.signature_edit.as_ref().unwrap().signature.pictures().is_empty());
+    // A new try clears it.
+    crate::signatures::add_picture(&mut a, json!({"data": crate::files::base64_lite::encode(&big_png(900)), "file": "y.png"}));
+    assert!(a.signature_note.as_ref().is_some_and(|n| !n.error));
+}
+
+/// #270: a shrunk picture that would take the signature over its total is refused on the page,
+/// and the signature keeps what it had.
+#[test]
+fn signature_picture_over_the_total_is_refused_on_the_page() {
+    use mailcraft_model::signature::{MAX_PICTURES, MAX_PICTURES_BYTES};
+    let png = crate::files::base64_lite::encode(&big_png(1200));
+    let mut a = signature_app();
+    let total = |a: &MailApp| a.session.signature_edit.as_ref().unwrap().signature.pictures().iter().map(|p| p.data.len()).sum::<usize>();
+    let mut refused = false;
+    for _ in 0..MAX_PICTURES {
+        let before = total(&a);
+        crate::signatures::add_picture(&mut a, json!({"data": png, "file": "logo.png"}));
+        if a.signature_note.as_ref().is_some_and(|n| n.error) {
+            assert_eq!(total(&a), before);
+            refused = true;
+            break;
+        }
+    }
+    assert!(refused);
+    assert!(total(&a) <= MAX_PICTURES_BYTES);
 }
