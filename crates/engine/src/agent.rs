@@ -708,7 +708,7 @@ pub fn classify(s: &Session, id: &str, params: &Value) -> Access {
         // away. When the owner wrote in it, the window asks them every time either way, saved or
         // not, until it is closed (#494); an agent's own message, headless too, is the agent's to
         // leave.
-        _ if leaves(id) && s.compose_named(params).is_some_and(|c| c.dirty || c.owner_changed || draft_gone(s, c)) => {
+        _ if leaves(id) && s.compose_named(params).is_some_and(|c| unsaved_message(s, c) || c.owner_changed) => {
             let lost = s.compose_named(params).is_some_and(|c| unsaved_message(s, c)) && p::bool(params, "discard") == Some(true);
             match (writing, lost) {
                 (true, true) => Access::Asked(Class::Delete),
@@ -733,10 +733,11 @@ fn leaves(id: &str) -> bool {
     LEAVING.contains(&id)
 }
 
-/// Whether what is written in the message isn't all in Drafts: changed since it was saved, or
-/// its draft is gone (#494).
+/// Whether what is written in the message isn't all in Drafts to stay: changed since it was
+/// saved, its draft is gone (#494), or it is there only by the background saves, which `discard`
+/// takes out again (#286).
 fn unsaved_message(s: &Session, c: &crate::Compose) -> bool {
-    c.dirty || draft_gone(s, c)
+    c.dirty || c.autosaved || draft_gone(s, c)
 }
 
 /// Whether the owner wrote in the message being written that a call acts on (`compose`, else the
@@ -1148,14 +1149,14 @@ fn what_it_does(s: &Session, id: &str, params: &Value) -> String {
         "file.import" => "import a file with an Outbox chosen: no mail goes in it, and none is sent".to_string(),
         "mail.delete" | "mail.deletePermanently" => {
             let ids = taken(params);
-            format!("delete {} for good", messages_text(s, &ids))
+            format!("permanently delete {}", messages_text(s, &ids))
         }
         "folder.empty" | "folder.delete" => {
             let f = p::id_strict(params, "id").map(|f| f.unwrap_or(s.view.folder)).unwrap_or_default();
             let name = s.mailbox.folder(f).map(|f| quoted(&f.name)).unwrap_or_else(|| "a folder".to_string());
             let n = s.mailbox.count(f);
-            let verb = if id == "folder.empty" { "empty" } else { "delete the folder" };
-            format!("{verb} {name} and the {} in it, for good", plural(n, "{n} message", "{n} messages"))
+            let verb = if id == "folder.empty" { "permanently empty" } else { "permanently delete the folder" };
+            format!("{verb} {name} and the {} in it", plural(n, "{n} message", "{n} messages"))
         }
         "account.setAutomaticReplies" => {
             let account = p::id(params, "account")
@@ -1196,7 +1197,7 @@ fn what_it_does(s: &Session, id: &str, params: &Value) -> String {
         "people.delete" => {
             let c = p::id_strict(params, "id").ok().and_then(|c| c.or(s.sel.contact)).and_then(|c| s.mailbox.contact(c));
             format!(
-                "delete the contact {} for good; contacts don't go to Deleted Items",
+                "permanently delete the contact {}; contacts don't go to Deleted Items",
                 c.map(|c| quoted(&c.name())).unwrap_or_else(|| "(none selected)".to_string())
             )
         }
@@ -1205,7 +1206,7 @@ fn what_it_does(s: &Session, id: &str, params: &Value) -> String {
             let others: Vec<String> =
                 params.get("others").and_then(Value::as_array).into_iter().flatten().take(100).map(|o| name(o.as_u64())).collect();
             format!(
-                "merge {} into the contact {} and delete them for good; contacts don't go to Deleted Items",
+                "merge {} into the contact {} and permanently delete them; contacts don't go to Deleted Items",
                 if others.is_empty() {
                     "(no contacts)".to_string()
                 } else {
@@ -1217,7 +1218,7 @@ fn what_it_does(s: &Session, id: &str, params: &Value) -> String {
         "tasks.delete" => {
             let t = p::id_strict(params, "id").ok().and_then(|t| t.or(s.sel.task)).and_then(|t| s.mailbox.task(t));
             let shared = if shared_task(s, id, params).is_some() { SHARED_TASK } else { "" };
-            format!("delete the task {} for good{shared}", t.map(|t| quoted(&t.title)).unwrap_or_else(|| "(none selected)".to_string()))
+            format!("permanently delete the task {}{shared}", t.map(|t| quoted(&t.title)).unwrap_or_else(|| "(none selected)".to_string()))
         }
         "tasks.edit" | "tasks.complete" | "tasks.categorize" if shared_task(s, id, params).is_some() => {
             let t = shared_task(s, id, params).map(|t| quoted(&t.title)).unwrap_or_default();
@@ -1460,9 +1461,16 @@ fn starting_text(s: &Session, id: &str, params: &Value) -> Option<String> {
 fn leaving_text(s: &Session, params: &Value) -> String {
     let writing = writing(s, params);
     // Saved as it is, it stays in Drafts as it was saved, `discard` or not.
-    let saved = s.compose_named(params).is_some_and(|c| !unsaved_message(s, c));
-    let then = if saved { "it stays in Drafts as it was last saved" } else { "what isn't saved of it goes to Drafts first" };
-    if p::bool(params, "discard") == Some(true) && !saved {
+    let c = s.compose_named(params);
+    let saved = c.is_some_and(|c| !unsaved_message(s, c));
+    // In Drafts as it is, but only by the background saves (#286): kept when it is closed, thrown
+    // away with `discard`.
+    let kept = c.is_some_and(|c| !c.dirty && !draft_gone(s, c));
+    let then = if kept { "it stays in Drafts as it was last saved" } else { "what isn't saved of it goes to Drafts first" };
+    let autosaved = c.is_some_and(|c| c.autosaved);
+    if p::bool(params, "discard") == Some(true) && autosaved {
+        format!("close the message {writing} without saving it: it will be thrown away, with the copy saved by itself in Drafts")
+    } else if p::bool(params, "discard") == Some(true) && !saved {
         format!("close the message {writing} without saving what the owner wrote in it")
     } else {
         format!("close the message {writing} that the owner is writing; {then}")
